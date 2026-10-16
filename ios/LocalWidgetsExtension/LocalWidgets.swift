@@ -3,6 +3,45 @@ import WidgetKit
 
 private let groupId = "group.com.example.localwidgets"
 
+private struct CuratedVerse: Decodable {
+    let id: String
+    let text: String
+    let reference: String
+    let topic: String
+}
+
+private enum LocalBible {
+    static let curated: [CuratedVerse] = {
+        guard let url = Bundle.main.url(forResource: "curated_widget", withExtension: "json"),
+              let data = try? Data(contentsOf: url),
+              let verses = try? JSONDecoder().decode([CuratedVerse].self, from: data) else {
+            return []
+        }
+        return verses
+    }()
+
+    static func dayNumber(for date: Date) -> Int {
+        let localParts = Calendar.current.dateComponents([.year, .month, .day], from: date)
+        var utc = Calendar(identifier: .gregorian)
+        utc.timeZone = TimeZone(secondsFromGMT: 0)!
+        let epoch = utc.date(from: DateComponents(year: 2020, month: 1, day: 1))!
+        let current = utc.date(from: localParts)!
+        return utc.dateComponents([.day], from: epoch, to: current).day ?? 0
+    }
+
+    static func verse(on date: Date, defaults: UserDefaults?) -> (String, String) {
+        if defaults?.string(forKey: "verse_mode") == "pinned",
+           let text = defaults?.string(forKey: "verse_text"), !text.isEmpty {
+            return (text, defaults?.string(forKey: "verse_reference") ?? "")
+        }
+        guard !curated.isEmpty else {
+            return ("Open Still to initialize your library.", "Still")
+        }
+        let index = ((dayNumber(for: date) % curated.count) + curated.count) % curated.count
+        return (curated[index].text, curated[index].reference)
+    }
+}
+
 struct LocalEntry: TimelineEntry {
     let date: Date
     let photoPath: String
@@ -33,6 +72,7 @@ struct LocalProvider: TimelineProvider {
 
     private func makeEntry(at date: Date) -> LocalEntry {
         let defaults = UserDefaults(suiteName: groupId)
+        let (verse, reference) = LocalBible.verse(on: date, defaults: defaults)
         let photoJSON = defaults?.string(forKey: "photo_paths") ?? "[]"
         let paths = (photoJSON.data(using: .utf8)
             .flatMap { try? JSONDecoder().decode([String].self, from: $0) }) ?? []
@@ -53,8 +93,8 @@ struct LocalProvider: TimelineProvider {
         return LocalEntry(
             date: date,
             photoPath: path,
-            verse: defaults?.string(forKey: "verse_text") ?? "Be still, and know that I am God.",
-            reference: defaults?.string(forKey: "verse_reference") ?? "Psalm 46:10",
+            verse: verse,
+            reference: reference,
             watchItems: list.prefix(4).map { "\($0.watched ? "✓" : "○")  \($0.title)" }
         )
     }

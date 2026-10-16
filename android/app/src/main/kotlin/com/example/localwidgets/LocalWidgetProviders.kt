@@ -9,17 +9,28 @@ import android.content.Intent
 import android.content.SharedPreferences
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
-import android.graphics.Canvas
-import android.graphics.Paint
-import android.graphics.PorterDuff
-import android.graphics.PorterDuffXfermode
-import android.graphics.Rect
-import android.graphics.RectF
 import android.os.Build
 import android.widget.RemoteViews
 import es.antonborri.home_widget.HomeWidgetLaunchIntent
 import es.antonborri.home_widget.HomeWidgetProvider
 import org.json.JSONArray
+import java.util.Calendar
+import java.util.TimeZone
+
+private const val MIDNIGHT_TICK = "com.example.localwidgets.MIDNIGHT_TICK"
+
+private fun dayNumber(): Int {
+    val local = Calendar.getInstance()
+    val utc = Calendar.getInstance(TimeZone.getTimeZone("UTC")).apply {
+        clear()
+        set(local.get(Calendar.YEAR), local.get(Calendar.MONTH), local.get(Calendar.DAY_OF_MONTH))
+    }
+    val epoch = Calendar.getInstance(TimeZone.getTimeZone("UTC")).apply {
+        clear()
+        set(2020, Calendar.JANUARY, 1)
+    }
+    return ((utc.timeInMillis - epoch.timeInMillis) / 86_400_000L).toInt()
+}
 
 internal fun getLaunchPendingIntent(context: Context): PendingIntent {
     return try {
@@ -33,25 +44,56 @@ internal fun getLaunchPendingIntent(context: Context): PendingIntent {
     }
 }
 
-internal fun getRoundedCornerBitmap(bitmap: Bitmap, cornerRadiusDp: Float, context: Context): Bitmap {
-    val density = context.resources.displayMetrics.density
-    val radiusPx = cornerRadiusDp * density
-    val output = Bitmap.createBitmap(bitmap.width, bitmap.height, Bitmap.Config.ARGB_8888)
-    val canvas = Canvas(output)
-    val paint = Paint(Paint.ANTI_ALIAS_FLAG)
-    val rect = Rect(0, 0, bitmap.width, bitmap.height)
-    val rectF = RectF(rect)
-    canvas.drawRoundRect(rectF, radiusPx, radiusPx, paint)
-    paint.xfermode = PorterDuffXfermode(PorterDuff.Mode.SRC_IN)
-    canvas.drawBitmap(bitmap, rect, rect, paint)
-    return output
+internal fun decodeWidgetBitmap(path: String, maxDimension: Int = 480): Bitmap? {
+    if (path.isBlank()) return null
+    val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+    BitmapFactory.decodeFile(path, bounds)
+    if (bounds.outWidth <= 0 || bounds.outHeight <= 0) return null
+    var sampleSize = 1
+    while (bounds.outWidth / sampleSize > maxDimension ||
+        bounds.outHeight / sampleSize > maxDimension) {
+        sampleSize *= 2
+    }
+    return BitmapFactory.decodeFile(path, BitmapFactory.Options().apply {
+        inSampleSize = sampleSize
+        inPreferredConfig = Bitmap.Config.RGB_565
+    })
+}
+
+private object CuratedVerseSource {
+    private var cached: JSONArray? = null
+
+    @Synchronized
+    fun all(context: Context): JSONArray {
+        if (cached == null) {
+            cached = try {
+                val json = context.assets.open("curated_widget.json")
+                    .bufferedReader(Charsets.UTF_8).use { it.readText() }
+                JSONArray(json)
+            } catch (_: Exception) {
+                JSONArray()
+            }
+        }
+        return cached!!
+    }
+
+    fun todaysVerse(context: Context): Pair<String, String> {
+        val verses = all(context)
+        if (verses.length() == 0) {
+            return Pair("Open Still to initialize your library.", "Still")
+        }
+        val verse = verses.optJSONObject(Math.floorMod(dayNumber(), verses.length()))
+        return Pair(
+            verse?.optString("text") ?: "",
+            verse?.optString("reference") ?: "",
+        )
+    }
 }
 
 class PhotoWidgetProvider : HomeWidgetProvider() {
     companion object {
         private const val ROTATION_INTERVAL_MS = 15000L
         private const val ALARM_REQUEST_CODE = 1001
-        private const val CORNER_RADIUS_DP = 22f
     }
 
     override fun onUpdate(context: Context, manager: AppWidgetManager, ids: IntArray, data: SharedPreferences) {
@@ -75,10 +117,9 @@ class PhotoWidgetProvider : HomeWidgetProvider() {
                 }
                 else -> paths.optString(0)
             }
-            val bitmap = BitmapFactory.decodeFile(path)
+            val bitmap = decodeWidgetBitmap(path)
             if (bitmap != null) {
-                val rounded = getRoundedCornerBitmap(bitmap, CORNER_RADIUS_DP, context)
-                view.setImageViewBitmap(R.id.photo_image, rounded)
+                view.setImageViewBitmap(R.id.photo_image, bitmap)
             } else {
                 view.setImageViewResource(R.id.photo_image, R.drawable.widget_placeholder)
             }
@@ -137,16 +178,68 @@ class PhotoWidgetProvider : HomeWidgetProvider() {
 class VerseWidgetProvider : HomeWidgetProvider() {
     override fun onUpdate(context: Context, manager: AppWidgetManager, ids: IntArray, data: SharedPreferences) {
         val launchIntent = getLaunchPendingIntent(context)
+        val mode = data.getString("verse_mode", "daily")
+        val verse = if (mode == "pinned" && !data.getString("verse_text", "").isNullOrBlank()) {
+            Pair(
+                data.getString("verse_text", "") ?: "",
+                data.getString("verse_reference", "") ?: "",
+            )
+        } else {
+            CuratedVerseSource.todaysVerse(context)
+        }
         for (id in ids) {
             val view = RemoteViews(context.packageName, R.layout.verse_widget)
             view.setOnClickPendingIntent(R.id.verse_widget_container, launchIntent)
             view.setOnClickPendingIntent(R.id.verse_text, launchIntent)
-            view.setTextViewText(R.id.verse_text,
-                data.getString("verse_text", "Be still, and know that I am God."))
-            view.setTextViewText(R.id.verse_reference,
-                data.getString("verse_reference", "Psalm 46:10"))
+            view.setTextViewText(R.id.verse_text, verse.first)
+            view.setTextViewText(R.id.verse_reference, verse.second)
             manager.updateAppWidget(id, view)
         }
+        scheduleDailyUpdate(context)
+    }
+
+    override fun onReceive(context: Context, intent: Intent) {
+        super.onReceive(context, intent)
+        if (intent.action == MIDNIGHT_TICK ||
+            intent.action == Intent.ACTION_TIME_CHANGED ||
+            intent.action == Intent.ACTION_TIMEZONE_CHANGED ||
+            intent.action == Intent.ACTION_BOOT_COMPLETED) {
+            val manager = AppWidgetManager.getInstance(context)
+            val verseIds = manager.getAppWidgetIds(ComponentName(context, VerseWidgetProvider::class.java))
+            if (verseIds.isNotEmpty()) {
+                val update = Intent(context, VerseWidgetProvider::class.java).apply {
+                    action = AppWidgetManager.ACTION_APPWIDGET_UPDATE
+                    putExtra(AppWidgetManager.EXTRA_APPWIDGET_IDS, verseIds)
+                }
+                context.sendBroadcast(update)
+            }
+            scheduleDailyUpdate(context)
+        }
+    }
+
+    private fun scheduleDailyUpdate(context: Context) {
+        val nextDay = Calendar.getInstance().apply {
+            add(Calendar.DAY_OF_YEAR, 1)
+            set(Calendar.HOUR_OF_DAY, 0)
+            set(Calendar.MINUTE, 5)
+            set(Calendar.SECOND, 0)
+            set(Calendar.MILLISECOND, 0)
+        }
+        val flags = PendingIntent.FLAG_UPDATE_CURRENT or
+            (if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) PendingIntent.FLAG_IMMUTABLE else 0)
+        val pending = PendingIntent.getBroadcast(
+            context,
+            7001,
+            Intent(context, VerseWidgetProvider::class.java).apply { action = MIDNIGHT_TICK },
+            flags,
+        )
+        val alarms = context.getSystemService(Context.ALARM_SERVICE) as? AlarmManager ?: return
+        alarms.setWindow(
+            AlarmManager.RTC_WAKEUP,
+            nextDay.timeInMillis,
+            30 * 60 * 1000L,
+            pending,
+        )
     }
 }
 

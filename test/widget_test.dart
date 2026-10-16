@@ -5,10 +5,9 @@ import 'package:shared_preferences/shared_preferences.dart';
 void main() {
   testWidgets('App smoke test', (WidgetTester tester) async {
     SharedPreferences.setMockInitialValues({});
-    await tester.pumpWidget(const LocalWidgetsApp());
+    await tester.pumpWidget(const StillApp());
     await tester.pump();
     expect(find.text('Still'), findsOneWidget);
-    expect(find.text('Switches photo every 15 seconds'), findsOneWidget);
+    expect(find.text('Loading your offline library...'), findsOneWidget);
   });
 }
-

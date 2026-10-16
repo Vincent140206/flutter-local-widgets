@@ -1,5 +1,6 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
     <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM" />
+    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
     <application
         android:label="@string/app_name"
         android:name="${applicationName}"
@@ -42,7 +43,13 @@
             android:name=".VerseWidgetProvider"
             android:label="@string/verse_widget_name"
             android:exported="true">
-            <intent-filter><action android:name="android.appwidget.action.APPWIDGET_UPDATE" /></intent-filter>
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+                <action android:name="android.intent.action.BOOT_COMPLETED" />
+                <action android:name="android.intent.action.TIME_SET" />
+                <action android:name="android.intent.action.TIMEZONE_CHANGED" />
+                <action android:name="com.example.localwidgets.MIDNIGHT_TICK" />
+            </intent-filter>
             <meta-data android:name="android.appwidget.provider" android:resource="@xml/verse_widget_info" />
         </receiver>
         <receiver
