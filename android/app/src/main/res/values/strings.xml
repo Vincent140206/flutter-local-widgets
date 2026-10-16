@@ -1,6 +1,10 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
+    <string name="app_name">Still</string>
+    <string name="photo_widget_name">Photo</string>
     <string name="photo_widget_description">Offline photo widget</string>
+    <string name="verse_widget_name">Daily Verse</string>
     <string name="verse_widget_description">Offline Bible verse widget</string>
+    <string name="watchlist_widget_name">Watchlist</string>
     <string name="watchlist_widget_description">Offline watchlist widget</string>
 </resources>

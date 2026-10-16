@@ -84,7 +84,9 @@ struct PhotoWidgetView: View {
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .clipped()
+        .clipShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
         .containerBackground(for: .widget) { surface }
+        .widgetURL(URL(string: "still://photo"))
     }
 }
 
@@ -115,6 +117,7 @@ struct VerseWidgetView: View {
             }
         }
         .containerBackground(for: .widget) { surface }
+        .widgetURL(URL(string: "still://verse"))
     }
 }
 
@@ -145,6 +148,7 @@ struct WatchlistWidgetView: View {
             }
         }
         .containerBackground(for: .widget) { surface }
+        .widgetURL(URL(string: "still://watchlist"))
     }
 }
 

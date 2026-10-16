@@ -207,11 +207,14 @@ class _DashboardState extends State<Dashboard> {
   bool rotatePhotos = true;
   bool syncing = false;
   Timer? photoRotationTimer;
+  StreamSubscription<Uri?>? widgetClickSubscription;
 
   @override
   void initState() {
     super.initState();
     load();
+    HomeWidget.initiallyLaunchedFromHomeWidget().catchError((_) => null);
+    widgetClickSubscription = HomeWidget.widgetClicked.listen((_) {});
     photoRotationTimer = Timer.periodic(const Duration(seconds: 15), (_) async {
       if (mounted && rotatePhotos && photos.isNotEmpty) {
         await repo.updatePhotoWidget();
@@ -261,6 +264,7 @@ class _DashboardState extends State<Dashboard> {
   @override
   void dispose() {
     photoRotationTimer?.cancel();
+    widgetClickSubscription?.cancel();
     verseController.dispose();
     referenceController.dispose();
     watchController.dispose();
