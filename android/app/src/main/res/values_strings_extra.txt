@@ -1,0 +1,4 @@
+<!-- Add within android/app/src/main/res/values/strings.xml <resources> -->
+<string name="photo_widget_description">Offline photo widget</string>
+<string name="verse_widget_description">Offline Bible verse widget</string>
+<string name="watchlist_widget_description">Offline watchlist widget</string>

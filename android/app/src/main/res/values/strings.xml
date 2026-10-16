@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="photo_widget_description">Offline photo widget</string>
+    <string name="verse_widget_description">Offline Bible verse widget</string>
+    <string name="watchlist_widget_description">Offline watchlist widget</string>
+</resources>

@@ -1,0 +1,13 @@
+<!-- Paste inside <application> of android/app/src/main/AndroidManifest.xml -->
+<receiver android:name=".PhotoWidgetProvider" android:exported="true">
+    <intent-filter><action android:name="android.appwidget.action.APPWIDGET_UPDATE" /></intent-filter>
+    <meta-data android:name="android.appwidget.provider" android:resource="@xml/photo_widget_info" />
+</receiver>
+<receiver android:name=".VerseWidgetProvider" android:exported="true">
+    <intent-filter><action android:name="android.appwidget.action.APPWIDGET_UPDATE" /></intent-filter>
+    <meta-data android:name="android.appwidget.provider" android:resource="@xml/verse_widget_info" />
+</receiver>
+<receiver android:name=".WatchlistWidgetProvider" android:exported="true">
+    <intent-filter><action android:name="android.appwidget.action.APPWIDGET_UPDATE" /></intent-filter>
+    <meta-data android:name="android.appwidget.provider" android:resource="@xml/watchlist_widget_info" />
+</receiver>
