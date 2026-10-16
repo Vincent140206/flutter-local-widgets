@@ -37,13 +37,14 @@ native widget targets.
 - Browse the Bible by book/chapter or search by phrase/reference such as
   `John 3:16`.
 - Favorite verses, use a deterministic daily verse, or pin a chosen verse.
-- Import multiple photos. Picker output is downsampled, Android decodes a
-  bounded bitmap, and photo exports are cached to prevent memory spikes.
+- Import multiple photos at up to 2560px and 92% quality. App previews use a
+  cached display-size decode, while Android widgets use a bounded 720px ARGB
+  decode so images remain sharp without loading camera-size bitmaps.
 - Rotate photos every 15 seconds while retaining the existing widget behavior.
 - Add, complete, and remove local watchlist items.
-- Automatically persist and refresh widgets after every setting/content
-  change. If another change occurs during a refresh, it is queued and applied
-  immediately afterward; there is no manual save/update step.
+- Automatically persist and refresh only the widget whose feature changed.
+  Photo, verse, and watchlist updates have independent queues, so unrelated
+  widgets and images are not reprocessed; there is no manual update step.
 - Preserve favorites when the bundled Bible dataset version changes.
 
 ## Local storage
@@ -51,11 +52,30 @@ native widget targets.
 - SQLite (`sqflite`): books, verses, curated verses, favorites, dataset
   metadata, and the reserved watchlist table.
 - Shared preferences: photo list, active verse mode, and current watchlist.
-- Application support storage: downsampled photo copies.
+- Application support storage: high-quality, bounded photo copies.
 - `home_widget`: widget-visible values and image copies.
 
 Uninstalling the app generally removes this local data. Gallery originals are
 never modified.
+
+## Source structure
+
+The Flutter source uses feature-first boundaries:
+
+```text
+lib/
+  app/                         app shell
+  core/theme/                  shared visual theme
+  core/widgets/                native widget synchronization
+  features/bible/              database, preferences, reader/search UI
+  features/photos/             photo import and local persistence
+  features/watchlist/          watchlist model and persistence
+  features/home/               dashboard composition
+```
+
+Android reads photo files directly from app-local storage, avoiding a second
+Flutter decode/export pass. iOS still exports into its required App Group, but
+uses file signatures to skip unchanged images and downsamples in WidgetKit.
 
 ## Build and verify
 

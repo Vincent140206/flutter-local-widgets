@@ -1,7 +1,25 @@
 import SwiftUI
 import WidgetKit
+import ImageIO
 
 private let groupId = "group.com.example.localwidgets"
+
+private func widgetImage(at path: String, maxPixelSize: Int = 1200) -> UIImage? {
+    guard !path.isEmpty,
+          let source = CGImageSourceCreateWithURL(URL(fileURLWithPath: path) as CFURL, nil) else {
+        return nil
+    }
+    let options: [CFString: Any] = [
+        kCGImageSourceCreateThumbnailFromImageAlways: true,
+        kCGImageSourceCreateThumbnailWithTransform: true,
+        kCGImageSourceThumbnailMaxPixelSize: maxPixelSize,
+        kCGImageSourceShouldCacheImmediately: true,
+    ]
+    guard let image = CGImageSourceCreateThumbnailAtIndex(source, 0, options as CFDictionary) else {
+        return nil
+    }
+    return UIImage(cgImage: image)
+}
 
 private struct CuratedVerse: Decodable {
     let id: String
@@ -112,7 +130,7 @@ struct PhotoWidgetView: View {
     var entry: LocalEntry
     var body: some View {
         Group {
-            if let image = UIImage(contentsOfFile: entry.photoPath) {
+            if let image = widgetImage(at: entry.photoPath) {
                 Image(uiImage: image).resizable().scaledToFill()
             } else {
                 ZStack {

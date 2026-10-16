@@ -44,7 +44,7 @@ internal fun getLaunchPendingIntent(context: Context): PendingIntent {
     }
 }
 
-internal fun decodeWidgetBitmap(path: String, maxDimension: Int = 480): Bitmap? {
+internal fun decodeWidgetBitmap(path: String, maxDimension: Int = 720): Bitmap? {
     if (path.isBlank()) return null
     val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
     BitmapFactory.decodeFile(path, bounds)
@@ -56,7 +56,7 @@ internal fun decodeWidgetBitmap(path: String, maxDimension: Int = 480): Bitmap? 
     }
     return BitmapFactory.decodeFile(path, BitmapFactory.Options().apply {
         inSampleSize = sampleSize
-        inPreferredConfig = Bitmap.Config.RGB_565
+        inPreferredConfig = Bitmap.Config.ARGB_8888
     })
 }
 

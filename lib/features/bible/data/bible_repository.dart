@@ -1,3 +1,6 @@
+/// Offline Bible database access and verse models.
+library;
+
 import 'dart:convert';
 import 'dart:io';
 import 'package:flutter/services.dart';
