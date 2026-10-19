@@ -10,4 +10,7 @@
     <string name="spotify_listener_name">Still Spotify access</string>
     <string name="spotify_widget_name">Now Playing</string>
     <string name="spotify_widget_description">Spotify now playing widget</string>
+    <string name="spotify_previous">Previous track</string>
+    <string name="spotify_play_pause">Play or pause</string>
+    <string name="spotify_next">Next track</string>
 </resources>

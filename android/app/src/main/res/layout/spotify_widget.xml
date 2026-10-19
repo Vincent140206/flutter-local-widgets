@@ -6,42 +6,47 @@
     android:orientation="horizontal"
     android:gravity="center_vertical"
     android:padding="14dp"
-    android:background="@drawable/widget_background">
+    android:background="@drawable/spotify_widget_background">
 
     <ImageView
         android:id="@+id/spotify_art"
-        android:layout_width="88dp"
-        android:layout_height="88dp"
+        android:layout_width="96dp"
+        android:layout_height="96dp"
+        android:background="@drawable/spotify_art_background"
+        android:clipToOutline="true"
         android:scaleType="centerCrop"
         android:contentDescription="@string/spotify_widget_description"
         android:src="@drawable/spotify_art_placeholder" />
 
     <LinearLayout
         android:layout_width="0dp"
-        android:layout_height="wrap_content"
+        android:layout_height="96dp"
         android:layout_weight="1"
-        android:layout_marginStart="14dp"
+        android:layout_marginStart="16dp"
         android:orientation="vertical">
 
         <TextView
             android:id="@+id/spotify_status"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:text="PLAYING ON SPOTIFY"
-            android:textColor="#B5A2FF"
+            android:text="SPOTIFY  •  PLAYING"
+            android:textColor="#A99AF0"
             android:textSize="9sp"
-            android:letterSpacing="0.12"
+            android:textStyle="bold"
+            android:fontFamily="sans-serif-medium"
+            android:letterSpacing="0.1"
             android:maxLines="1" />
 
         <TextView
             android:id="@+id/spotify_title"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginTop="6dp"
+            android:layout_marginTop="4dp"
             android:text="Nothing playing"
-            android:textColor="#FFFFFF"
+            android:textColor="#F7F5FA"
             android:textSize="17sp"
             android:textStyle="bold"
+            android:fontFamily="sans-serif-medium"
             android:maxLines="1"
             android:ellipsize="end" />
 
@@ -49,10 +54,10 @@
             android:id="@+id/spotify_artist"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginTop="2dp"
+            android:layout_marginTop="1dp"
             android:text="Waiting for Spotify"
-            android:textColor="#B8B8C3"
-            android:textSize="12sp"
+            android:textColor="#A6A3AE"
+            android:textSize="11sp"
             android:maxLines="1"
             android:ellipsize="end" />
 
@@ -60,7 +65,7 @@
             android:id="@+id/spotify_progress_group"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginTop="9dp"
+            android:layout_marginTop="8dp"
             android:orientation="vertical">
 
             <ProgressBar
@@ -70,30 +75,55 @@
                 android:layout_height="3dp"
                 android:max="100"
                 android:progress="0"
-                android:progressTint="#B5A2FF"
-                android:progressBackgroundTint="#444550" />
+                android:progressDrawable="@drawable/spotify_progress" />
+        </LinearLayout>
 
-            <LinearLayout
-                android:layout_width="match_parent"
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="0dp"
+            android:layout_weight="1"
+            android:layout_marginTop="4dp"
+            android:orientation="horizontal"
+            android:gravity="center_vertical">
+
+            <TextView
+                android:id="@+id/spotify_time"
+                android:layout_width="0dp"
                 android:layout_height="wrap_content"
-                android:layout_marginTop="3dp"
-                android:orientation="horizontal">
-                <TextView
-                    android:id="@+id/spotify_elapsed"
-                    android:layout_width="0dp"
-                    android:layout_height="wrap_content"
-                    android:layout_weight="1"
-                    android:text="0:00"
-                    android:textColor="#8F909B"
-                    android:textSize="9sp" />
-                <TextView
-                    android:id="@+id/spotify_duration"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:text="0:00"
-                    android:textColor="#8F909B"
-                    android:textSize="9sp" />
-            </LinearLayout>
+                android:layout_weight="1"
+                android:text="0:00  /  0:00"
+                android:textColor="#74727D"
+                android:textSize="14sp"
+                android:maxLines="1" />
+
+            <ImageButton
+                android:id="@+id/spotify_previous"
+                android:layout_width="30dp"
+                android:layout_height="30dp"
+                android:padding="5dp"
+                android:background="@android:color/transparent"
+                android:src="@drawable/spotify_previous"
+                android:contentDescription="@string/spotify_previous" />
+
+            <ImageButton
+                android:id="@+id/spotify_play_pause"
+                android:layout_width="30dp"
+                android:layout_height="30dp"
+                android:layout_marginStart="4dp"
+                android:layout_marginEnd="4dp"
+                android:padding="8dp"
+                android:background="@drawable/spotify_control_primary_background"
+                android:src="@drawable/spotify_play"
+                android:contentDescription="@string/spotify_play_pause" />
+
+            <ImageButton
+                android:id="@+id/spotify_next"
+                android:layout_width="30dp"
+                android:layout_height="30dp"
+                android:padding="5dp"
+                android:background="@android:color/transparent"
+                android:src="@drawable/spotify_next"
+                android:contentDescription="@string/spotify_next" />
         </LinearLayout>
     </LinearLayout>
 </LinearLayout>
