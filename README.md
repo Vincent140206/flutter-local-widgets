@@ -37,9 +37,10 @@ native widget targets.
 - Browse the Bible by book/chapter or search by phrase/reference such as
   `John 3:16`.
 - Favorite verses, use a deterministic daily verse, or pin a chosen verse.
-- Import multiple photos at up to 2560px and 92% quality. App previews use a
-  cached display-size decode, while Android widgets use a bounded 720px ARGB
-  decode so images remain sharp without loading camera-size bitmaps.
+- Import original-resolution photos on Android without recompression. App
+  previews use a cached display-size decode, while Android widgets calculate a
+  density-aware target, center-crop during native region decoding, and enforce
+  an 8 MB pixel budget so images stay sharp without loading camera-size bitmaps.
 - Rotate photos every 15 seconds while retaining the existing widget behavior.
 - Add, complete, and remove local watchlist items.
 - Automatically persist and refresh only the widget whose feature changed.
