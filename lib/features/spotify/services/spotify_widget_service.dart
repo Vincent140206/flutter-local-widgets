@@ -16,6 +16,12 @@ class SpotifyWidgetService {
     }
   }
 
+  Future<void> refreshNotificationListener() async {
+    if (Platform.isAndroid) {
+      await _channel.invokeMethod<void>('refreshNotificationListener');
+    }
+  }
+
   Future<bool> requestPinWidget() async {
     if (!Platform.isAndroid) return false;
     return await _channel.invokeMethod<bool>('requestPinWidget') ?? false;

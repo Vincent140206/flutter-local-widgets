@@ -12,6 +12,7 @@ import '../../photos/data/photo_repository.dart';
 import '../../spotify/services/spotify_widget_service.dart';
 import '../../watchlist/data/watchlist_repository.dart';
 import '../../watchlist/domain/watch_item.dart';
+import '../../whatsapp/services/whatsapp_widget_service.dart';
 
 class StillHomePage extends StatefulWidget {
   const StillHomePage({super.key});
@@ -28,6 +29,7 @@ class _StillHomePageState extends State<StillHomePage>
   final widgetSync = WidgetSyncService();
   final watchInput = TextEditingController();
   final spotifyWidget = SpotifyWidgetService();
+  final whatsappWidget = WhatsAppWidgetService();
 
   BibleRepository? bible;
   List<String> photos = [];
@@ -36,8 +38,8 @@ class _StillHomePageState extends State<StillHomePage>
   bool rotate = true;
   bool pinned = false;
   bool importingPhotos = false;
-  bool spotifyAccess = false;
-  bool checkingSpotifyAccess = true;
+  bool notificationAccess = false;
+  bool checkingNotificationAccess = true;
   String? error;
 
   @override
@@ -45,20 +47,21 @@ class _StillHomePageState extends State<StillHomePage>
     super.initState();
     WidgetsBinding.instance.addObserver(this);
     _load();
-    _refreshSpotifyAccess();
+    _refreshNotificationAccess();
   }
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
-    if (state == AppLifecycleState.resumed) _refreshSpotifyAccess();
+    if (state == AppLifecycleState.resumed) _refreshNotificationAccess();
   }
 
-  Future<void> _refreshSpotifyAccess() async {
+  Future<void> _refreshNotificationAccess() async {
     final access = await spotifyWidget.hasNotificationAccess();
+    if (access) await spotifyWidget.refreshNotificationListener();
     if (!mounted) return;
     setState(() {
-      spotifyAccess = access;
-      checkingSpotifyAccess = false;
+      notificationAccess = access;
+      checkingNotificationAccess = false;
     });
   }
 
@@ -226,6 +229,10 @@ class _StillHomePageState extends State<StillHomePage>
                     _heading('04', 'Spotify now playing'),
                     const SizedBox(height: 12),
                     _spotifyCard(),
+                    const SizedBox(height: 24),
+                    _heading('05', 'WhatsApp notifications'),
+                    const SizedBox(height: 12),
+                    _whatsappCard(),
                   ],
                   const SizedBox(height: 12),
                   const Text(
@@ -269,9 +276,9 @@ class _StillHomePageState extends State<StillHomePage>
                         ),
                         const SizedBox(height: 4),
                         Text(
-                          checkingSpotifyAccess
+                          checkingNotificationAccess
                               ? 'Checking access…'
-                              : spotifyAccess
+                              : notificationAccess
                                   ? 'Ready for Spotify'
                                   : 'Notification access required',
                           style: const TextStyle(
@@ -283,16 +290,17 @@ class _StillHomePageState extends State<StillHomePage>
                     ),
                   ),
                   Icon(
-                    spotifyAccess
+                    notificationAccess
                         ? Icons.check_circle_rounded
                         : Icons.info_outline_rounded,
-                    color: spotifyAccess ? const Color(0xFF72D69B) : violet,
+                    color:
+                        notificationAccess ? const Color(0xFF72D69B) : violet,
                   ),
                 ],
               ),
               const SizedBox(height: 14),
               Text(
-                spotifyAccess
+                notificationAccess
                     ? 'Still can now read Spotify’s local media session. Play a song, then add the widget to your home screen.'
                     : 'Allow Still under Notification access so it can read Spotify’s title, artist, cover, and playback state. Other notifications are ignored.',
                 style: const TextStyle(
@@ -306,16 +314,18 @@ class _StillHomePageState extends State<StillHomePage>
                 runSpacing: 8,
                 children: [
                   FilledButton.icon(
-                    onPressed: checkingSpotifyAccess
+                    onPressed: checkingNotificationAccess
                         ? null
                         : () async {
                             await spotifyWidget.openNotificationAccess();
                           },
                     icon: Icon(
-                      spotifyAccess ? Icons.settings_outlined : Icons.lock_open,
+                      notificationAccess
+                          ? Icons.settings_outlined
+                          : Icons.lock_open,
                     ),
                     label: Text(
-                      spotifyAccess ? 'Manage access' : 'Allow access',
+                      notificationAccess ? 'Manage access' : 'Allow access',
                     ),
                   ),
                   OutlinedButton.icon(
@@ -324,6 +334,121 @@ class _StillHomePageState extends State<StillHomePage>
                       if (!requested && mounted) {
                         _show(
                           'Open your launcher’s widget picker and choose Still · Now Playing.',
+                        );
+                      }
+                    },
+                    icon: const Icon(Icons.add_to_home_screen_outlined),
+                    label: const Text('Add widget'),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      );
+
+  Widget _whatsappCard() => Card(
+        child: Padding(
+          padding: const EdgeInsets.all(18),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Container(
+                    width: 54,
+                    height: 54,
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF24312A),
+                      borderRadius: BorderRadius.circular(16),
+                    ),
+                    child: const Icon(
+                      Icons.chat_bubble_rounded,
+                      color: Color(0xFF72D69B),
+                    ),
+                  ),
+                  const SizedBox(width: 14),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text(
+                          'WHATSAPP NOTIFICATIONS',
+                          style: TextStyle(
+                            letterSpacing: 1.5,
+                            fontSize: 10,
+                            color: Color(0xFF72D69B),
+                          ),
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          checkingNotificationAccess
+                              ? 'Checking access…'
+                              : notificationAccess
+                                  ? 'Ready for notifications'
+                                  : 'Notification access required',
+                          style: const TextStyle(
+                            fontSize: 17,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  Icon(
+                    notificationAccess
+                        ? Icons.check_circle_rounded
+                        : Icons.info_outline_rounded,
+                    color:
+                        notificationAccess ? const Color(0xFF72D69B) : violet,
+                  ),
+                ],
+              ),
+              const SizedBox(height: 14),
+              Text(
+                notificationAccess
+                    ? 'Still keeps WhatsApp notifications on your home screen after they are dismissed, then removes them when WhatsApp reports the chat as opened or read.'
+                    : 'Allow notification access to show sender names and message previews. Still ignores other apps and stores the data only on this device.',
+                style: const TextStyle(
+                  color: Color(0xFFB8B8C3),
+                  height: 1.35,
+                ),
+              ),
+              const SizedBox(height: 8),
+              const Text(
+                'Read detection is best-effort. Muted chats, hidden previews, and manually marked unread chats may not appear.',
+                style: TextStyle(
+                  color: Color(0xFF858691),
+                  fontSize: 12,
+                  height: 1.3,
+                ),
+              ),
+              const SizedBox(height: 14),
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: [
+                  FilledButton.icon(
+                    onPressed: checkingNotificationAccess
+                        ? null
+                        : () async {
+                            await whatsappWidget.openNotificationAccess();
+                          },
+                    icon: Icon(
+                      notificationAccess
+                          ? Icons.settings_outlined
+                          : Icons.lock_open,
+                    ),
+                    label: Text(
+                      notificationAccess ? 'Manage access' : 'Allow access',
+                    ),
+                  ),
+                  OutlinedButton.icon(
+                    onPressed: () async {
+                      final requested = await whatsappWidget.requestPinWidget();
+                      if (!requested && mounted) {
+                        _show(
+                          'Open your launcher’s widget picker and choose Still · WhatsApp Notifications.',
                         );
                       }
                     },

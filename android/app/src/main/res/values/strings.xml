@@ -7,10 +7,12 @@
     <string name="verse_widget_description">Offline Bible verse widget</string>
     <string name="watchlist_widget_name">Watchlist</string>
     <string name="watchlist_widget_description">Offline watchlist widget</string>
-    <string name="spotify_listener_name">Still Spotify access</string>
+    <string name="spotify_listener_name">Still notification access</string>
     <string name="spotify_widget_name">Now Playing</string>
     <string name="spotify_widget_description">Spotify now playing widget</string>
     <string name="spotify_previous">Previous track</string>
     <string name="spotify_play_pause">Play or pause</string>
     <string name="spotify_next">Next track</string>
+    <string name="whatsapp_widget_name">WhatsApp Notifications</string>
+    <string name="whatsapp_widget_description">Saved WhatsApp notifications stored locally</string>
 </resources>

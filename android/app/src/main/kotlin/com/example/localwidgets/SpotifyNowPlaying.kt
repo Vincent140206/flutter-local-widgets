@@ -24,6 +24,7 @@ import android.os.Looper
 import android.os.SystemClock
 import android.service.notification.NotificationListenerService
 import android.service.notification.StatusBarNotification
+import android.util.Log
 import android.view.View
 import android.widget.RemoteViews
 import java.io.File
@@ -51,14 +52,38 @@ class SpotifyMediaListener : NotificationListenerService() {
         override fun onSessionDestroyed() = connectToSpotify()
     }
 
-    override fun onListenerConnected() = connectToSpotify()
+    override fun onListenerConnected() {
+        Log.d("StillNotifications", "Notification listener connected")
+        connectToSpotify()
+        mergeActiveWhatsAppNotifications()
+    }
 
     override fun onNotificationPosted(sbn: StatusBarNotification) {
         if (sbn.packageName == SPOTIFY_PACKAGE) connectToSpotify()
+        if (WhatsAppNotificationStore.isWhatsAppPackage(sbn.packageName)) {
+            Log.d("StillNotifications", "WhatsApp notification posted: ${sbn.key}")
+            WhatsAppNotificationStore.upsert(this, sbn)
+        }
     }
 
-    override fun onNotificationRemoved(sbn: StatusBarNotification) {
+    override fun onNotificationRemoved(
+        sbn: StatusBarNotification,
+        rankingMap: RankingMap,
+        reason: Int,
+    ) {
         if (sbn.packageName == SPOTIFY_PACKAGE) connectToSpotify()
+        if (WhatsAppNotificationStore.isWhatsAppPackage(sbn.packageName)) {
+            WhatsAppNotificationStore.onRemoved(this, sbn, reason)
+        }
+    }
+
+    private fun mergeActiveWhatsAppNotifications() {
+        val notifications = try {
+            activeNotifications ?: emptyArray()
+        } catch (_: SecurityException) {
+            emptyArray()
+        }
+        WhatsAppNotificationStore.mergeActive(this, notifications)
     }
 
     private fun connectToSpotify() {
