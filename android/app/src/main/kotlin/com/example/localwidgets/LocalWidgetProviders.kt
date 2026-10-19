@@ -9,6 +9,8 @@ import android.content.Intent
 import android.content.SharedPreferences
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
+import android.graphics.BitmapRegionDecoder
+import android.graphics.Rect
 import android.os.Build
 import android.widget.RemoteViews
 import es.antonborri.home_widget.HomeWidgetLaunchIntent
@@ -16,6 +18,9 @@ import es.antonborri.home_widget.HomeWidgetProvider
 import org.json.JSONArray
 import java.util.Calendar
 import java.util.TimeZone
+import kotlin.math.max
+import kotlin.math.roundToInt
+import kotlin.math.sqrt
 
 private const val MIDNIGHT_TICK = "com.example.localwidgets.MIDNIGHT_TICK"
 
@@ -44,20 +49,88 @@ internal fun getLaunchPendingIntent(context: Context): PendingIntent {
     }
 }
 
-internal fun decodeWidgetBitmap(path: String, maxDimension: Int = 720): Bitmap? {
-    if (path.isBlank()) return null
-    val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
-    BitmapFactory.decodeFile(path, bounds)
-    if (bounds.outWidth <= 0 || bounds.outHeight <= 0) return null
-    var sampleSize = 1
-    while (bounds.outWidth / sampleSize > maxDimension ||
-        bounds.outHeight / sampleSize > maxDimension) {
-        sampleSize *= 2
+internal fun widgetTargetPixels(
+    context: Context,
+    manager: AppWidgetManager,
+    widgetId: Int,
+): Pair<Int, Int> {
+    val options = manager.getAppWidgetOptions(widgetId)
+    val density = context.resources.displayMetrics.density
+    val widthDp = max(
+        options.getInt(AppWidgetManager.OPTION_APPWIDGET_MIN_WIDTH, 240),
+        options.getInt(AppWidgetManager.OPTION_APPWIDGET_MAX_WIDTH, 240),
+    )
+    val heightDp = max(
+        options.getInt(AppWidgetManager.OPTION_APPWIDGET_MIN_HEIGHT, 180),
+        options.getInt(AppWidgetManager.OPTION_APPWIDGET_MAX_HEIGHT, 180),
+    )
+    var width = (widthDp * density * 1.2f).roundToInt().coerceIn(600, 1800)
+    var height = (heightDp * density * 1.2f).roundToInt().coerceIn(600, 1800)
+
+    // Keep the RemoteViews bitmap around 8 MB or less. This is sharp enough
+    // for high-density widgets while staying well below camera-image memory.
+    val pixelBudget = 2_000_000.0
+    val pixels = width.toDouble() * height.toDouble()
+    if (pixels > pixelBudget) {
+        val scale = sqrt(pixelBudget / pixels)
+        width = (width * scale).roundToInt()
+        height = (height * scale).roundToInt()
     }
-    return BitmapFactory.decodeFile(path, BitmapFactory.Options().apply {
-        inSampleSize = sampleSize
-        inPreferredConfig = Bitmap.Config.ARGB_8888
-    })
+    return Pair(width, height)
+}
+
+internal fun decodeWidgetBitmap(
+    path: String,
+    targetWidth: Int,
+    targetHeight: Int,
+): Bitmap? {
+    if (path.isBlank()) return null
+    val decoder = try {
+        BitmapRegionDecoder.newInstance(path, false)
+    } catch (_: Exception) {
+        null
+    } ?: return null
+    return try {
+        val sourceWidth = decoder.width
+        val sourceHeight = decoder.height
+        val sourceAspect = sourceWidth.toDouble() / sourceHeight
+        val targetAspect = targetWidth.toDouble() / targetHeight
+        val crop = if (sourceAspect > targetAspect) {
+            val cropWidth = (sourceHeight * targetAspect).roundToInt()
+            val left = (sourceWidth - cropWidth) / 2
+            Rect(left, 0, left + cropWidth, sourceHeight)
+        } else {
+            val cropHeight = (sourceWidth / targetAspect).roundToInt()
+            val top = (sourceHeight - cropHeight) / 2
+            Rect(0, top, sourceWidth, top + cropHeight)
+        }
+
+        var sampleSize = 1
+        while (crop.width() / (sampleSize * 2) >= targetWidth &&
+            crop.height() / (sampleSize * 2) >= targetHeight) {
+            sampleSize *= 2
+        }
+
+        val sampledWidth = crop.width().toFloat() / sampleSize
+        val sampledHeight = crop.height().toFloat() / sampleSize
+        val finalScale = max(
+            targetWidth / sampledWidth,
+            targetHeight / sampledHeight,
+        ).coerceAtMost(1f)
+        decoder.decodeRegion(crop, BitmapFactory.Options().apply {
+            inSampleSize = sampleSize
+            inPreferredConfig = Bitmap.Config.ARGB_8888
+            if (finalScale < 0.99f) {
+                inScaled = true
+                inDensity = 1000
+                inTargetDensity = (1000 * finalScale).roundToInt()
+            }
+        })
+    } catch (_: Exception) {
+        null
+    } finally {
+        decoder.recycle()
+    }
 }
 
 private object CuratedVerseSource {
@@ -117,7 +190,8 @@ class PhotoWidgetProvider : HomeWidgetProvider() {
                 }
                 else -> paths.optString(0)
             }
-            val bitmap = decodeWidgetBitmap(path)
+            val target = widgetTargetPixels(context, manager, id)
+            val bitmap = decodeWidgetBitmap(path, target.first, target.second)
             if (bitmap != null) {
                 view.setImageViewBitmap(R.id.photo_image, bitmap)
             } else {

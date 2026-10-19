@@ -4,7 +4,7 @@ import ImageIO
 
 private let groupId = "group.com.example.localwidgets"
 
-private func widgetImage(at path: String, maxPixelSize: Int = 1200) -> UIImage? {
+private func widgetImage(at path: String, maxPixelSize: Int = 1800) -> UIImage? {
     guard !path.isEmpty,
           let source = CGImageSourceCreateWithURL(URL(fileURLWithPath: path) as CFURL, nil) else {
         return nil
