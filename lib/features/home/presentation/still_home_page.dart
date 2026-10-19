@@ -9,6 +9,7 @@ import '../../bible/data/bible_repository.dart';
 import '../../bible/data/verse_preferences.dart';
 import '../../bible/presentation/bible_library_page.dart';
 import '../../photos/data/photo_repository.dart';
+import '../../spotify/services/spotify_widget_service.dart';
 import '../../watchlist/data/watchlist_repository.dart';
 import '../../watchlist/domain/watch_item.dart';
 
@@ -19,12 +20,14 @@ class StillHomePage extends StatefulWidget {
   State<StillHomePage> createState() => _StillHomePageState();
 }
 
-class _StillHomePageState extends State<StillHomePage> {
+class _StillHomePageState extends State<StillHomePage>
+    with WidgetsBindingObserver {
   final photoRepository = PhotoRepository();
   final versePreferences = VersePreferences();
   final watchlistRepository = WatchlistRepository();
   final widgetSync = WidgetSyncService();
   final watchInput = TextEditingController();
+  final spotifyWidget = SpotifyWidgetService();
 
   BibleRepository? bible;
   List<String> photos = [];
@@ -33,12 +36,30 @@ class _StillHomePageState extends State<StillHomePage> {
   bool rotate = true;
   bool pinned = false;
   bool importingPhotos = false;
+  bool spotifyAccess = false;
+  bool checkingSpotifyAccess = true;
   String? error;
 
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     _load();
+    _refreshSpotifyAccess();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) _refreshSpotifyAccess();
+  }
+
+  Future<void> _refreshSpotifyAccess() async {
+    final access = await spotifyWidget.hasNotificationAccess();
+    if (!mounted) return;
+    setState(() {
+      spotifyAccess = access;
+      checkingSpotifyAccess = false;
+    });
   }
 
   Future<void> _load() async {
@@ -159,6 +180,7 @@ class _StillHomePageState extends State<StillHomePage> {
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     watchInput.dispose();
     bible?.close();
     super.dispose();
@@ -199,6 +221,12 @@ class _StillHomePageState extends State<StillHomePage> {
                   _heading('03', 'Watchlist'),
                   const SizedBox(height: 12),
                   _watchlistCard(),
+                  if (Platform.isAndroid) ...[
+                    const SizedBox(height: 24),
+                    _heading('04', 'Spotify now playing'),
+                    const SizedBox(height: 12),
+                    _spotifyCard(),
+                  ],
                   const SizedBox(height: 12),
                   const Text(
                     'Offline by design. No account, analytics, or cloud sync.',
@@ -207,6 +235,106 @@ class _StillHomePageState extends State<StillHomePage> {
                   ),
                 ],
               ),
+      );
+
+  Widget _spotifyCard() => Card(
+        child: Padding(
+          padding: const EdgeInsets.all(18),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Container(
+                    width: 54,
+                    height: 54,
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF242530),
+                      borderRadius: BorderRadius.circular(14),
+                    ),
+                    child: const Icon(Icons.music_note_rounded, color: violet),
+                  ),
+                  const SizedBox(width: 14),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text(
+                          'NOW PLAYING',
+                          style: TextStyle(
+                            letterSpacing: 1.8,
+                            fontSize: 10,
+                            color: violet,
+                          ),
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          checkingSpotifyAccess
+                              ? 'Checking access…'
+                              : spotifyAccess
+                                  ? 'Ready for Spotify'
+                                  : 'Notification access required',
+                          style: const TextStyle(
+                            fontSize: 17,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  Icon(
+                    spotifyAccess
+                        ? Icons.check_circle_rounded
+                        : Icons.info_outline_rounded,
+                    color: spotifyAccess ? const Color(0xFF72D69B) : violet,
+                  ),
+                ],
+              ),
+              const SizedBox(height: 14),
+              Text(
+                spotifyAccess
+                    ? 'Still can now read Spotify’s local media session. Play a song, then add the widget to your home screen.'
+                    : 'Allow Still under Notification access so it can read Spotify’s title, artist, cover, and playback state. Other notifications are ignored.',
+                style: const TextStyle(
+                  color: Color(0xFFB8B8C3),
+                  height: 1.35,
+                ),
+              ),
+              const SizedBox(height: 14),
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: [
+                  FilledButton.icon(
+                    onPressed: checkingSpotifyAccess
+                        ? null
+                        : () async {
+                            await spotifyWidget.openNotificationAccess();
+                          },
+                    icon: Icon(
+                      spotifyAccess ? Icons.settings_outlined : Icons.lock_open,
+                    ),
+                    label: Text(
+                      spotifyAccess ? 'Manage access' : 'Allow access',
+                    ),
+                  ),
+                  OutlinedButton.icon(
+                    onPressed: () async {
+                      final requested = await spotifyWidget.requestPinWidget();
+                      if (!requested && mounted) {
+                        _show(
+                          'Open your launcher’s widget picker and choose Still · Now Playing.',
+                        );
+                      }
+                    },
+                    icon: const Icon(Icons.add_to_home_screen_outlined),
+                    label: const Text('Add widget'),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
       );
 
   Widget _verseCard() => Card(

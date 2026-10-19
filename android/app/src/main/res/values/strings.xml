@@ -7,4 +7,7 @@
     <string name="verse_widget_description">Offline Bible verse widget</string>
     <string name="watchlist_widget_name">Watchlist</string>
     <string name="watchlist_widget_description">Offline watchlist widget</string>
+    <string name="spotify_listener_name">Still Spotify access</string>
+    <string name="spotify_widget_name">Now Playing</string>
+    <string name="spotify_widget_description">Spotify now playing widget</string>
 </resources>
