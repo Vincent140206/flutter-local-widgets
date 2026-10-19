@@ -302,8 +302,8 @@ class _StillHomePageState extends State<StillHomePage> {
                             File(photos[index]),
                             height: 130,
                             width: 130,
-                            cacheWidth: 520,
-                            cacheHeight: 520,
+                            cacheWidth: 780,
+                            cacheHeight: 780,
                             filterQuality: FilterQuality.high,
                             fit: BoxFit.cover,
                             errorBuilder: (_, __, ___) => const SizedBox(

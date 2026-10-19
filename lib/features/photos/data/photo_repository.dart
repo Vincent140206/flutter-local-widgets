@@ -20,13 +20,15 @@ class PhotoRepository {
   }
 
   Future<List<String>> importPhotos() async {
+    final optimizeForIosExtension = Platform.isIOS;
     final selected = await ImagePicker().pickMultiImage(
-      // Keep enough detail for high-density medium/large widgets. Rendering is
-      // downsampled later, so these files stay sharp without decoding at full
-      // camera resolution in the UI or Android widget process.
-      imageQuality: 92,
-      maxWidth: 2560,
-      maxHeight: 2560,
+      // Android keeps the original bytes. The native widget decodes only the
+      // pixels it needs, so quality is preserved without a camera-sized bitmap
+      // ever entering Flutter memory. iOS needs a shared App Group copy, so it
+      // gets a still-high-resolution bound before that export step.
+      imageQuality: optimizeForIosExtension ? 96 : null,
+      maxWidth: optimizeForIosExtension ? 3840 : null,
+      maxHeight: optimizeForIosExtension ? 3840 : null,
     );
     final current = await readPhotos();
     if (selected.isEmpty) return current;
