@@ -12,8 +12,11 @@ import android.graphics.BitmapFactory
 import android.graphics.BitmapRegionDecoder
 import android.graphics.Rect
 import android.os.Build
+import android.os.Bundle
+import android.content.res.Configuration
 import android.widget.RemoteViews
 import es.antonborri.home_widget.HomeWidgetLaunchIntent
+import es.antonborri.home_widget.HomeWidgetPlugin
 import es.antonborri.home_widget.HomeWidgetProvider
 import org.json.JSONArray
 import java.util.Calendar
@@ -56,16 +59,27 @@ internal fun widgetTargetPixels(
 ): Pair<Int, Int> {
     val options = manager.getAppWidgetOptions(widgetId)
     val density = context.resources.displayMetrics.density
-    val widthDp = max(
-        options.getInt(AppWidgetManager.OPTION_APPWIDGET_MIN_WIDTH, 240),
-        options.getInt(AppWidgetManager.OPTION_APPWIDGET_MAX_WIDTH, 240),
-    )
-    val heightDp = max(
-        options.getInt(AppWidgetManager.OPTION_APPWIDGET_MIN_HEIGHT, 180),
-        options.getInt(AppWidgetManager.OPTION_APPWIDGET_MAX_HEIGHT, 180),
-    )
-    var width = (widthDp * density * 1.2f).roundToInt().coerceIn(600, 1800)
-    var height = (heightDp * density * 1.2f).roundToInt().coerceIn(600, 1800)
+    val portrait = context.resources.configuration.orientation != Configuration.ORIENTATION_LANDSCAPE
+    val widthDp = options.getInt(
+        if (portrait) AppWidgetManager.OPTION_APPWIDGET_MIN_WIDTH
+        else AppWidgetManager.OPTION_APPWIDGET_MAX_WIDTH,
+        240,
+    ).coerceAtLeast(1)
+    val heightDp = options.getInt(
+        if (portrait) AppWidgetManager.OPTION_APPWIDGET_MAX_HEIGHT
+        else AppWidgetManager.OPTION_APPWIDGET_MIN_HEIGHT,
+        180,
+    ).coerceAtLeast(1)
+    var width = (widthDp * density * 1.2f).roundToInt().coerceAtLeast(128)
+    var height = (heightDp * density * 1.2f).roundToInt().coerceAtLeast(128)
+
+    // Downscale both axes together so the decoded bitmap keeps the exact widget ratio.
+    val maxSide = max(width, height)
+    if (maxSide > 1800) {
+        val scale = 1800f / maxSide
+        width = (width * scale).roundToInt()
+        height = (height * scale).roundToInt()
+    }
 
     // Keep the RemoteViews bitmap around 8 MB or less. This is sharp enough
     // for high-density widgets while staying well below camera-image memory.
@@ -205,6 +219,22 @@ class PhotoWidgetProvider : HomeWidgetProvider() {
         } else {
             cancelScheduledUpdates(context)
         }
+    }
+
+    override fun onAppWidgetOptionsChanged(
+        context: Context,
+        appWidgetManager: AppWidgetManager,
+        appWidgetId: Int,
+        newOptions: Bundle,
+    ) {
+        super.onAppWidgetOptionsChanged(context, appWidgetManager, appWidgetId, newOptions)
+        // Re-decode at the new aspect ratio as soon as the launcher finishes resizing.
+        onUpdate(
+            context,
+            appWidgetManager,
+            intArrayOf(appWidgetId),
+            HomeWidgetPlugin.getData(context),
+        )
     }
 
     override fun onDisabled(context: Context) {
