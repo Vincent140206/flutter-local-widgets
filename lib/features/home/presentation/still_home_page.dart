@@ -8,6 +8,7 @@ import '../../../core/widgets/widget_sync_service.dart';
 import '../../bible/data/bible_repository.dart';
 import '../../bible/data/verse_preferences.dart';
 import '../../bible/presentation/bible_library_page.dart';
+import '../../island/services/still_island_service.dart';
 import '../../photos/data/photo_repository.dart';
 import '../../spotify/services/spotify_widget_service.dart';
 import '../../watchlist/data/watchlist_repository.dart';
@@ -30,6 +31,7 @@ class _StillHomePageState extends State<StillHomePage>
   final watchInput = TextEditingController();
   final spotifyWidget = SpotifyWidgetService();
   final whatsappWidget = WhatsAppWidgetService();
+  final stillIsland = StillIslandService();
 
   BibleRepository? bible;
   List<String> photos = [];
@@ -40,6 +42,9 @@ class _StillHomePageState extends State<StillHomePage>
   bool importingPhotos = false;
   bool notificationAccess = false;
   bool checkingNotificationAccess = true;
+  bool overlayAccess = false;
+  bool islandEnabled = false;
+  bool checkingIsland = true;
   String? error;
 
   @override
@@ -48,11 +53,15 @@ class _StillHomePageState extends State<StillHomePage>
     WidgetsBinding.instance.addObserver(this);
     _load();
     _refreshNotificationAccess();
+    _refreshIslandState();
   }
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
-    if (state == AppLifecycleState.resumed) _refreshNotificationAccess();
+    if (state == AppLifecycleState.resumed) {
+      _refreshNotificationAccess();
+      _refreshIslandState();
+    }
   }
 
   Future<void> _refreshNotificationAccess() async {
@@ -63,6 +72,29 @@ class _StillHomePageState extends State<StillHomePage>
       notificationAccess = access;
       checkingNotificationAccess = false;
     });
+  }
+
+  Future<void> _refreshIslandState() async {
+    final results = await Future.wait([
+      stillIsland.hasOverlayPermission(),
+      stillIsland.isEnabled(),
+    ]);
+    if (!mounted) return;
+    setState(() {
+      overlayAccess = results[0];
+      islandEnabled = results[0] && results[1];
+      checkingIsland = false;
+    });
+  }
+
+  Future<void> _toggleIsland() async {
+    if (!overlayAccess) {
+      await stillIsland.openOverlayPermission();
+      return;
+    }
+    final enabled = await stillIsland.setEnabled(!islandEnabled);
+    if (!mounted) return;
+    setState(() => islandEnabled = enabled);
   }
 
   Future<void> _load() async {
@@ -233,6 +265,10 @@ class _StillHomePageState extends State<StillHomePage>
                     _heading('05', 'WhatsApp notifications'),
                     const SizedBox(height: 12),
                     _whatsappCard(),
+                    const SizedBox(height: 24),
+                    _heading('06', 'Still Island'),
+                    const SizedBox(height: 12),
+                    _islandCard(),
                   ],
                   const SizedBox(height: 12),
                   const Text(
@@ -456,6 +492,163 @@ class _StillHomePageState extends State<StillHomePage>
                     label: const Text('Add widget'),
                   ),
                 ],
+              ),
+            ],
+          ),
+        ),
+      );
+
+  Widget _islandCard() => Card(
+        clipBehavior: Clip.antiAlias,
+        child: Padding(
+          padding: const EdgeInsets.all(18),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text(
+                          'INTERACTIVE OVERLAY',
+                          style: TextStyle(
+                            letterSpacing: 1.7,
+                            fontSize: 10,
+                            color: violet,
+                          ),
+                        ),
+                        const SizedBox(height: 5),
+                        Text(
+                          checkingIsland
+                              ? 'Checking Still Island…'
+                              : islandEnabled
+                                  ? 'Live around your camera'
+                                  : overlayAccess
+                                      ? 'Ready to launch'
+                                      : 'Overlay permission required',
+                          style: const TextStyle(
+                            fontSize: 18,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  Switch.adaptive(
+                    value: islandEnabled,
+                    onChanged: checkingIsland ? null : (_) => _toggleIsland(),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 18),
+              Center(
+                child: AnimatedContainer(
+                  duration: const Duration(milliseconds: 320),
+                  curve: Curves.easeOutCubic,
+                  width: islandEnabled ? 250 : 176,
+                  height: islandEnabled ? 76 : 42,
+                  padding: const EdgeInsets.symmetric(horizontal: 14),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF09090C),
+                    borderRadius: BorderRadius.circular(
+                      islandEnabled ? 24 : 28,
+                    ),
+                    border: Border.all(color: Colors.white12),
+                    boxShadow: const [
+                      BoxShadow(
+                        color: Colors.black45,
+                        blurRadius: 20,
+                        offset: Offset(0, 8),
+                      ),
+                    ],
+                  ),
+                  child: Row(
+                    children: [
+                      Container(
+                        width: 8,
+                        height: 8,
+                        decoration: const BoxDecoration(
+                          color: Color(0xFF65D895),
+                          shape: BoxShape.circle,
+                        ),
+                      ),
+                      const SizedBox(width: 10),
+                      const Expanded(
+                        child: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              'Still Island',
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: TextStyle(
+                                fontSize: 12,
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
+                            Text(
+                              'Spotify · WhatsApp',
+                              maxLines: 1,
+                              style: TextStyle(
+                                color: Color(0xFF85828E),
+                                fontSize: 9,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      Text(
+                        islandEnabled ? 'LIVE' : 'OFF',
+                        style: TextStyle(
+                          color: islandEnabled
+                              ? const Color(0xFF65D895)
+                              : const Color(0xFF77747E),
+                          fontSize: 9,
+                          fontWeight: FontWeight.w800,
+                          letterSpacing: 1,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+              const SizedBox(height: 18),
+              const Text(
+                'Tap the pill to expand it. Control Spotify, open the latest WhatsApp message, or swipe up to collapse.',
+                style: TextStyle(
+                  color: Color(0xFFB8B8C3),
+                  height: 1.35,
+                ),
+              ),
+              const SizedBox(height: 8),
+              const Text(
+                'For reliable background updates on HyperOS, allow autostart and set Still battery usage to No restrictions.',
+                style: TextStyle(
+                  color: Color(0xFF858691),
+                  fontSize: 12,
+                  height: 1.3,
+                ),
+              ),
+              const SizedBox(height: 14),
+              FilledButton.icon(
+                onPressed: checkingIsland ? null : _toggleIsland,
+                icon: Icon(
+                  !overlayAccess
+                      ? Icons.layers_outlined
+                      : islandEnabled
+                          ? Icons.pause_circle_outline_rounded
+                          : Icons.play_circle_outline_rounded,
+                ),
+                label: Text(
+                  !overlayAccess
+                      ? 'Allow overlay'
+                      : islandEnabled
+                          ? 'Turn off Island'
+                          : 'Launch Island',
+                ),
               ),
             ],
           ),

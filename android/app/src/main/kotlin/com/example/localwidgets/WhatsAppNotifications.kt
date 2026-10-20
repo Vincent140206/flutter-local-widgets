@@ -133,6 +133,7 @@ internal object WhatsAppNotificationStore {
             .putString(NOTIFICATIONS_KEY, json.toString())
             .commit()
         WhatsAppWidgetProvider.updateAll(context)
+        StillIslandService.notifyDataChanged(context)
     }
 
     private fun parse(sbn: StatusBarNotification): List<WhatsAppNotification> {

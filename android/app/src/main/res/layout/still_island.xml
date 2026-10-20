@@ -1,0 +1,252 @@
+<?xml version="1.0" encoding="utf-8"?>
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/island_root"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@drawable/island_background"
+    android:clipToOutline="true">
+
+    <LinearLayout
+        android:id="@+id/island_compact"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:gravity="center_vertical"
+        android:orientation="horizontal"
+        android:paddingStart="15dp"
+        android:paddingEnd="15dp">
+
+        <LinearLayout
+            android:layout_width="0dp"
+            android:layout_height="match_parent"
+            android:layout_weight="1"
+            android:gravity="center_vertical"
+            android:orientation="horizontal">
+
+            <View
+                android:id="@+id/island_status_dot"
+                android:layout_width="7dp"
+                android:layout_height="7dp"
+                android:background="@drawable/island_green_dot" />
+
+            <TextView
+                android:id="@+id/island_compact_title"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="7dp"
+                android:layout_weight="1"
+                android:ellipsize="end"
+                android:maxLines="1"
+                android:text="Still"
+                android:textColor="#FFF7F7FA"
+                android:textSize="10sp"
+                android:textStyle="bold" />
+        </LinearLayout>
+
+        <Space
+            android:layout_width="44dp"
+            android:layout_height="1dp" />
+
+        <FrameLayout
+            android:layout_width="0dp"
+            android:layout_height="match_parent"
+            android:layout_weight="1">
+
+            <TextView
+                android:id="@+id/island_compact_meta"
+                android:layout_width="match_parent"
+                android:layout_height="match_parent"
+                android:gravity="end|center_vertical"
+                android:text="LIVE"
+                android:textColor="#FF8C8995"
+                android:textSize="9sp"
+                android:textStyle="bold" />
+
+            <com.example.localwidgets.SpectrumVisualizerView
+                android:id="@+id/island_spectrum"
+                android:layout_width="32dp"
+                android:layout_height="18dp"
+                android:layout_gravity="end|center_vertical"
+                android:visibility="gone" />
+        </FrameLayout>
+    </LinearLayout>
+
+    <LinearLayout
+        android:id="@+id/island_expanded"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:alpha="0"
+        android:orientation="vertical"
+        android:padding="14dp"
+        android:visibility="gone">
+
+        <LinearLayout
+            android:id="@+id/island_header"
+            android:layout_width="match_parent"
+            android:layout_height="54dp"
+            android:gravity="center_vertical"
+            android:orientation="horizontal">
+
+            <ImageView
+                android:id="@+id/island_art"
+                android:layout_width="48dp"
+                android:layout_height="48dp"
+                android:background="@drawable/island_art_background"
+                android:clipToOutline="true"
+                android:contentDescription="Album artwork"
+                android:scaleType="centerCrop"
+                android:src="@drawable/spotify_art_placeholder" />
+
+            <LinearLayout
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="12dp"
+                android:layout_weight="1"
+                android:orientation="vertical">
+
+                <TextView
+                    android:id="@+id/island_label"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:letterSpacing="0.12"
+                    android:text="STILL ISLAND"
+                    android:textColor="#FF8E7DFF"
+                    android:textSize="9sp"
+                    android:textStyle="bold" />
+
+                <TextView
+                    android:id="@+id/island_title"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="3dp"
+                    android:ellipsize="end"
+                    android:maxLines="1"
+                    android:text="Nothing playing"
+                    android:textColor="#FFF7F7FA"
+                    android:textSize="15sp"
+                    android:textStyle="bold" />
+
+                <TextView
+                    android:id="@+id/island_subtitle"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="2dp"
+                    android:ellipsize="end"
+                    android:maxLines="1"
+                    android:text="Waiting for Spotify"
+                    android:textColor="#FF95929D"
+                    android:textSize="10sp" />
+            </LinearLayout>
+
+            <TextView
+                android:id="@+id/island_close"
+                android:layout_width="34dp"
+                android:layout_height="34dp"
+                android:background="@drawable/island_control_background"
+                android:gravity="center"
+                android:text="×"
+                android:textColor="#FFAAA7B0"
+                android:textSize="20sp" />
+        </LinearLayout>
+
+        <ProgressBar
+            android:id="@+id/island_progress"
+            style="?android:attr/progressBarStyleHorizontal"
+            android:layout_width="match_parent"
+            android:layout_height="2dp"
+            android:layout_marginTop="10dp"
+            android:max="1000"
+            android:progress="0"
+            android:progressTint="#FF8E7DFF"
+            android:progressBackgroundTint="#FF2D2B34" />
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="48dp"
+            android:gravity="center"
+            android:orientation="horizontal">
+
+            <ImageButton
+                android:id="@+id/island_previous"
+                android:layout_width="40dp"
+                android:layout_height="40dp"
+                android:background="@drawable/island_control_background"
+                android:contentDescription="Previous"
+                android:padding="8dp"
+                android:src="@drawable/spotify_previous" />
+
+            <ImageButton
+                android:id="@+id/island_play_pause"
+                android:layout_width="44dp"
+                android:layout_height="44dp"
+                android:layout_marginStart="16dp"
+                android:layout_marginEnd="16dp"
+                android:background="@drawable/spotify_control_primary_background"
+                android:contentDescription="Play or pause"
+                android:padding="9dp"
+                android:src="@drawable/spotify_play" />
+
+            <ImageButton
+                android:id="@+id/island_next"
+                android:layout_width="40dp"
+                android:layout_height="40dp"
+                android:background="@drawable/island_control_background"
+                android:contentDescription="Next"
+                android:padding="8dp"
+                android:src="@drawable/spotify_next" />
+        </LinearLayout>
+
+        <LinearLayout
+            android:id="@+id/island_message"
+            android:layout_width="match_parent"
+            android:layout_height="50dp"
+            android:background="@drawable/island_surface"
+            android:gravity="center_vertical"
+            android:orientation="horizontal"
+            android:paddingStart="12dp"
+            android:paddingEnd="12dp">
+
+            <View
+                android:layout_width="7dp"
+                android:layout_height="7dp"
+                android:background="@drawable/island_green_dot" />
+
+            <LinearLayout
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="10dp"
+                android:layout_weight="1"
+                android:orientation="vertical">
+
+                <TextView
+                    android:id="@+id/island_sender"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:ellipsize="end"
+                    android:maxLines="1"
+                    android:text="WhatsApp"
+                    android:textColor="#FFF0EFF3"
+                    android:textSize="11sp"
+                    android:textStyle="bold" />
+
+                <TextView
+                    android:id="@+id/island_message_text"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="2dp"
+                    android:ellipsize="end"
+                    android:maxLines="1"
+                    android:textColor="#FF8F8C97"
+                    android:textSize="9sp" />
+            </LinearLayout>
+
+            <TextView
+                android:id="@+id/island_message_count"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="1"
+                android:textColor="#FF65D895"
+                android:textSize="10sp"
+                android:textStyle="bold" />
+        </LinearLayout>
+    </LinearLayout>
+</FrameLayout>

@@ -308,6 +308,7 @@ class SpotifyMediaListener : NotificationListenerService() {
         widgetExecutor.execute {
             try {
                 SpotifyWidgetProvider.updateAll(this)
+                StillIslandService.notifyDataChanged(this)
             } catch (error: RuntimeException) {
                 Log.e("StillNotifications", "Unable to refresh Spotify widget", error)
             }
