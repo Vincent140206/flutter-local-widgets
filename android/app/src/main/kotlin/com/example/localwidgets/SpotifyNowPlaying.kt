@@ -30,39 +30,109 @@ import android.widget.RemoteViews
 import java.io.File
 import java.io.FileOutputStream
 import java.util.Locale
+import java.util.concurrent.Executors
+import java.util.concurrent.atomic.AtomicBoolean
 
 private const val SPOTIFY_PACKAGE = "com.spotify.music"
 private const val SPOTIFY_PREFS = "still_spotify"
 private const val ALBUM_ART_FILE = "spotify_album_art.png"
 
 class SpotifyMediaListener : NotificationListenerService() {
+    companion object {
+        @Volatile
+        private var listenerConnected = false
+        @Volatile
+        private var currentInstance: SpotifyMediaListener? = null
+        private var lastRebindRequest = 0L
+        private var lastManualRefresh = 0L
+
+        @Synchronized
+        fun ensureConnected(context: Context) {
+            val now = SystemClock.elapsedRealtime()
+            currentInstance?.let { service ->
+                if (now - lastManualRefresh >= 5_000L) {
+                    lastManualRefresh = now
+                    service.ticker.post { service.reconcileNow() }
+                }
+                return
+            }
+            if (listenerConnected || Build.VERSION.SDK_INT < Build.VERSION_CODES.N) return
+            if (now - lastRebindRequest < 10_000L) return
+            lastRebindRequest = now
+            requestRebind(ComponentName(context, SpotifyMediaListener::class.java))
+        }
+    }
+
     private var controller: MediaController? = null
+    private var sessionManager: MediaSessionManager? = null
+    private var sessionsListenerRegistered = false
+    private val artworkExecutor = Executors.newSingleThreadExecutor()
+    private val notificationExecutor = Executors.newSingleThreadExecutor()
+    private val widgetExecutor = Executors.newSingleThreadExecutor()
+    private val progressUpdateQueued = AtomicBoolean(false)
+    private var lastArtworkKey = ""
+    private var lastFullWidgetState = ""
     private val ticker = Handler(Looper.getMainLooper())
     private val tick = object : Runnable {
         override fun run() {
             if (controller?.playbackState?.state != PlaybackState.STATE_PLAYING) return
-            SpotifyWidgetProvider.updateProgressAll(this@SpotifyMediaListener)
+            safelyUpdateSpotifyProgress()
             ticker.postDelayed(this, 1_000L)
+        }
+    }
+    private val watchdog = object : Runnable {
+        override fun run() {
+            reconcileNow()
+            ticker.postDelayed(this, 15_000L)
         }
     }
 
     private val callback = object : MediaController.Callback() {
         override fun onMetadataChanged(metadata: MediaMetadata?) = publish(metadata)
         override fun onPlaybackStateChanged(state: PlaybackState?) = publish()
-        override fun onSessionDestroyed() = connectToSpotify()
+        override fun onSessionDestroyed() {
+            controller?.unregisterCallback(this)
+            controller = null
+            ticker.postDelayed({ connectToSpotify() }, 250L)
+        }
+    }
+
+    private val sessionsChanged = MediaSessionManager.OnActiveSessionsChangedListener {
+        connectToSpotify()
     }
 
     override fun onListenerConnected() {
+        listenerConnected = true
+        currentInstance = this
         Log.d("StillNotifications", "Notification listener connected")
-        connectToSpotify()
-        mergeActiveWhatsAppNotifications()
+        registerSessionsListener()
+        reconcileNow()
+        ticker.removeCallbacks(watchdog)
+        ticker.postDelayed(watchdog, 15_000L)
+    }
+
+    override fun onListenerDisconnected() {
+        listenerConnected = false
+        if (currentInstance === this) currentInstance = null
+        ticker.removeCallbacks(watchdog)
+        Log.w("StillNotifications", "Notification listener disconnected; requesting rebind")
+        unregisterSessionsListener()
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
+            requestRebind(ComponentName(this, SpotifyMediaListener::class.java))
+        }
     }
 
     override fun onNotificationPosted(sbn: StatusBarNotification) {
         if (sbn.packageName == SPOTIFY_PACKAGE) connectToSpotify()
         if (WhatsAppNotificationStore.isWhatsAppPackage(sbn.packageName)) {
             Log.d("StillNotifications", "WhatsApp notification posted: ${sbn.key}")
-            WhatsAppNotificationStore.upsert(this, sbn)
+            notificationExecutor.execute {
+                try {
+                    WhatsAppNotificationStore.upsert(this, sbn)
+                } catch (error: Exception) {
+                    Log.e("StillNotifications", "Unable to store WhatsApp notification", error)
+                }
+            }
         }
     }
 
@@ -73,8 +143,20 @@ class SpotifyMediaListener : NotificationListenerService() {
     ) {
         if (sbn.packageName == SPOTIFY_PACKAGE) connectToSpotify()
         if (WhatsAppNotificationStore.isWhatsAppPackage(sbn.packageName)) {
-            WhatsAppNotificationStore.onRemoved(this, sbn, reason)
+            notificationExecutor.execute {
+                try {
+                    WhatsAppNotificationStore.onRemoved(this, sbn, reason)
+                } catch (error: Exception) {
+                    Log.e("StillNotifications", "Unable to remove WhatsApp notification", error)
+                }
+            }
         }
+    }
+
+    private fun reconcileNow() {
+        if (!listenerConnected) return
+        connectToSpotify()
+        mergeActiveWhatsAppNotifications()
     }
 
     private fun mergeActiveWhatsAppNotifications() {
@@ -83,11 +165,20 @@ class SpotifyMediaListener : NotificationListenerService() {
         } catch (_: SecurityException) {
             emptyArray()
         }
-        WhatsAppNotificationStore.mergeActive(this, notifications)
+        notificationExecutor.execute {
+            try {
+                WhatsAppNotificationStore.mergeActive(this, notifications)
+            } catch (error: Exception) {
+                Log.e("StillNotifications", "Unable to reconcile WhatsApp notifications", error)
+            }
+        }
     }
 
     private fun connectToSpotify() {
-        val manager = getSystemService(MEDIA_SESSION_SERVICE) as MediaSessionManager
+        val manager = sessionManager
+            ?: (getSystemService(MEDIA_SESSION_SERVICE) as MediaSessionManager).also {
+                sessionManager = it
+            }
         val next = try {
             manager.getActiveSessions(ComponentName(this, SpotifyMediaListener::class.java))
                 .firstOrNull { it.packageName == SPOTIFY_PACKAGE }
@@ -98,20 +189,48 @@ class SpotifyMediaListener : NotificationListenerService() {
         if (controller?.sessionToken != next?.sessionToken) {
             controller?.unregisterCallback(callback)
             controller = next
-            controller?.registerCallback(callback)
+            controller?.registerCallback(callback, ticker)
         }
         publish()
+    }
+
+    private fun registerSessionsListener() {
+        if (sessionsListenerRegistered) return
+        val manager = getSystemService(MEDIA_SESSION_SERVICE) as MediaSessionManager
+        sessionManager = manager
+        try {
+            manager.addOnActiveSessionsChangedListener(
+                sessionsChanged,
+                ComponentName(this, SpotifyMediaListener::class.java),
+                ticker,
+            )
+            sessionsListenerRegistered = true
+        } catch (_: SecurityException) {
+            sessionsListenerRegistered = false
+        }
+    }
+
+    private fun unregisterSessionsListener() {
+        if (!sessionsListenerRegistered) return
+        sessionManager?.removeOnActiveSessionsChangedListener(sessionsChanged)
+        sessionsListenerRegistered = false
     }
 
     private fun publish(metadataOverride: MediaMetadata? = null) {
         val metadata = metadataOverride ?: controller?.metadata
         val state = controller?.playbackState
         if (metadata == null) {
+            val fullState = "empty|${controller != null}"
             getSharedPreferences(SPOTIFY_PREFS, MODE_PRIVATE).edit()
                 .putBoolean("playing", false)
                 .putBoolean("connected", controller != null)
                 .apply()
-            SpotifyWidgetProvider.updateAll(this)
+            if (fullState != lastFullWidgetState) {
+                lastFullWidgetState = fullState
+                safelyUpdateSpotifyWidget()
+            } else {
+                safelyUpdateSpotifyProgress()
+            }
             return
         }
         val title = metadata.getString(MediaMetadata.METADATA_KEY_TITLE).orEmpty()
@@ -142,15 +261,30 @@ class SpotifyMediaListener : NotificationListenerService() {
 
         val art = metadata.getBitmap(MediaMetadata.METADATA_KEY_ALBUM_ART)
             ?: metadata.getBitmap(MediaMetadata.METADATA_KEY_ART)
-        if (art != null) saveAlbumArt(art)
-        SpotifyWidgetProvider.updateAll(this)
+        val fullState = "$title|$artist|$album|$duration|$playing"
+        if (fullState != lastFullWidgetState) {
+            lastFullWidgetState = fullState
+            safelyUpdateSpotifyWidget()
+        } else {
+            safelyUpdateSpotifyProgress()
+        }
+        val artworkKey = "$title|$album"
+        if (art != null && artworkKey != lastArtworkKey) {
+            lastArtworkKey = artworkKey
+            artworkExecutor.execute {
+                saveAlbumArt(art)
+                ticker.post {
+                    safelyUpdateSpotifyWidget()
+                }
+            }
+        }
         ticker.removeCallbacks(tick)
         if (playing) ticker.postDelayed(tick, 1_000L)
     }
 
     private fun saveAlbumArt(bitmap: Bitmap) {
         try {
-            val maxSide = 384
+            val maxSide = 256
             val scale = minOf(1f, maxSide.toFloat() / maxOf(bitmap.width, bitmap.height))
             val output = if (scale < 1f) {
                 Bitmap.createScaledBitmap(
@@ -169,9 +303,41 @@ class SpotifyMediaListener : NotificationListenerService() {
         }
     }
 
+    private fun safelyUpdateSpotifyWidget() {
+        if (widgetExecutor.isShutdown) return
+        widgetExecutor.execute {
+            try {
+                SpotifyWidgetProvider.updateAll(this)
+            } catch (error: RuntimeException) {
+                Log.e("StillNotifications", "Unable to refresh Spotify widget", error)
+            }
+        }
+    }
+
+    private fun safelyUpdateSpotifyProgress() {
+        if (widgetExecutor.isShutdown) return
+        if (!progressUpdateQueued.compareAndSet(false, true)) return
+        widgetExecutor.execute {
+            try {
+                SpotifyWidgetProvider.updateProgressAll(this)
+            } catch (error: RuntimeException) {
+                Log.e("StillNotifications", "Unable to refresh Spotify progress", error)
+            } finally {
+                progressUpdateQueued.set(false)
+            }
+        }
+    }
+
     override fun onDestroy() {
+        listenerConnected = false
+        if (currentInstance === this) currentInstance = null
+        ticker.removeCallbacks(watchdog)
         ticker.removeCallbacks(tick)
         controller?.unregisterCallback(callback)
+        unregisterSessionsListener()
+        artworkExecutor.shutdownNow()
+        notificationExecutor.shutdownNow()
+        widgetExecutor.shutdownNow()
         super.onDestroy()
     }
 }
@@ -211,16 +377,7 @@ class SpotifyWidgetProvider : AppWidgetProvider() {
             val position = livePosition(prefs, duration, playing)
             ids.forEach { id ->
                 val view = RemoteViews(context.packageName, R.layout.spotify_widget)
-                view.setProgressBar(
-                    R.id.spotify_progress,
-                    duration.coerceAtMost(Int.MAX_VALUE.toLong()).toInt().coerceAtLeast(1),
-                    position.coerceAtMost(Int.MAX_VALUE.toLong()).toInt(),
-                    false,
-                )
-                view.setTextViewText(
-                    R.id.spotify_time,
-                    "${formatTime(position)}  /  ${formatTime(duration)}",
-                )
+                setPlaybackProgress(view, duration, position, playing)
                 view.setImageViewResource(
                     R.id.spotify_play_pause,
                     if (playing) R.drawable.spotify_pause else R.drawable.spotify_play,
@@ -285,16 +442,7 @@ class SpotifyWidgetProvider : AppWidgetProvider() {
                 },
             )
             view.setViewVisibility(R.id.spotify_progress_group, if (hasTrack) View.VISIBLE else View.INVISIBLE)
-            view.setProgressBar(
-                R.id.spotify_progress,
-                duration.coerceAtMost(Int.MAX_VALUE.toLong()).toInt().coerceAtLeast(1),
-                position.coerceAtMost(Int.MAX_VALUE.toLong()).toInt(),
-                false,
-            )
-            view.setTextViewText(
-                R.id.spotify_time,
-                "${formatTime(position)}  /  ${formatTime(duration)}",
-            )
+            setPlaybackProgress(view, duration, position, playing)
 
             val artFile = File(context.filesDir, ALBUM_ART_FILE)
             val art = if (artFile.exists()) BitmapFactory.decodeFile(artFile.path) else null
@@ -375,6 +523,28 @@ class SpotifyWidgetProvider : AppWidgetProvider() {
                 ((SystemClock.elapsedRealtime() - updatedAt).coerceAtLeast(0L) * speed).toLong()
             } else 0L
             return (basePosition + liveOffset).coerceIn(0L, duration.coerceAtLeast(0L))
+        }
+
+        private fun setPlaybackProgress(
+            view: RemoteViews,
+            duration: Long,
+            position: Long,
+            playing: Boolean,
+        ) {
+            view.setProgressBar(
+                R.id.spotify_progress,
+                duration.coerceAtMost(Int.MAX_VALUE.toLong()).toInt().coerceAtLeast(1),
+                position.coerceAtMost(Int.MAX_VALUE.toLong()).toInt(),
+                false,
+            )
+            // Chronometer advances inside the launcher process, so elapsed time stays
+            // realtime without waiting for another RemoteViews Binder transaction.
+            view.setChronometer(
+                R.id.spotify_time,
+                SystemClock.elapsedRealtime() - position,
+                "%s  /  ${formatTime(duration)}",
+                playing,
+            )
         }
 
         private fun formatTime(milliseconds: Long): String {

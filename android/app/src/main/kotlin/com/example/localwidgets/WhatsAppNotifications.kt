@@ -36,15 +36,19 @@ internal object WhatsAppNotificationStore {
 
     @Synchronized
     fun mergeActive(context: Context, activeNotifications: Array<StatusBarNotification>) {
-        val saved = read(context).associateByTo(linkedMapOf()) { it.key }
+        val original = read(context)
+        val saved = original.associateByTo(linkedMapOf()) { it.key }
         activeNotifications
             .asSequence()
             .filter { isWhatsAppPackage(it.packageName) }
             .filter { it.notification.flags and Notification.FLAG_GROUP_SUMMARY == 0 }
             .flatMap { parse(it).asSequence() }
             .forEach { item -> saved[item.key] = item }
-        Log.d(NOTIFICATION_LOG_TAG, "Merged active notifications; saved=${saved.size}")
-        save(context, saved.values)
+        val merged = saved.values.sortedByDescending { it.timestamp }
+        if (merged != original.sortedByDescending { it.timestamp }) {
+            Log.d(NOTIFICATION_LOG_TAG, "Merged active notifications; saved=${saved.size}")
+            save(context, merged)
+        }
     }
 
     @Synchronized
@@ -127,7 +131,7 @@ internal object WhatsAppNotificationStore {
         context.getSharedPreferences(WHATSAPP_PREFS, Context.MODE_PRIVATE)
             .edit()
             .putString(NOTIFICATIONS_KEY, json.toString())
-            .apply()
+            .commit()
         WhatsAppWidgetProvider.updateAll(context)
     }
 
@@ -215,8 +219,15 @@ class WhatsAppWidgetProvider : AppWidgetProvider() {
         fun updateAll(context: Context) {
             val manager = AppWidgetManager.getInstance(context)
             val ids = manager.getAppWidgetIds(ComponentName(context, WhatsAppWidgetProvider::class.java))
-            ids.forEach { update(context, manager, it) }
-            manager.notifyAppWidgetViewDataChanged(ids, R.id.whatsapp_list)
+            try {
+                ids.forEach { update(context, manager, it) }
+                // A RemoteViewsService loads only visible rows. This avoids sending the
+                // entire message history through one Binder transaction.
+                @Suppress("DEPRECATION")
+                manager.notifyAppWidgetViewDataChanged(ids, R.id.whatsapp_list)
+            } catch (error: RuntimeException) {
+                Log.e(NOTIFICATION_LOG_TAG, "Unable to refresh WhatsApp widget", error)
+            }
         }
 
         private fun update(context: Context, manager: AppWidgetManager, widgetId: Int) {
@@ -236,6 +247,7 @@ class WhatsAppWidgetProvider : AppWidgetProvider() {
                 putExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, widgetId)
                 data = Uri.parse(toUri(Intent.URI_INTENT_SCHEME))
             }
+            @Suppress("DEPRECATION")
             view.setRemoteAdapter(R.id.whatsapp_list, serviceIntent)
             view.setEmptyView(R.id.whatsapp_list, R.id.whatsapp_empty)
 
@@ -297,17 +309,7 @@ private class WhatsAppWidgetFactory(private val context: Context) : RemoteViewsS
 
     override fun getViewAt(position: Int): RemoteViews? {
         val item = items.optJSONObject(position) ?: return null
-        val sender = item.optString("sender", "WhatsApp")
-        return RemoteViews(context.packageName, R.layout.whatsapp_widget_row).apply {
-            setTextViewText(
-                R.id.whatsapp_initial,
-                sender.trim().firstOrNull()?.uppercaseChar()?.toString() ?: "W",
-            )
-            setTextViewText(R.id.whatsapp_sender, sender)
-            setTextViewText(R.id.whatsapp_message, item.optString("message", ""))
-            setTextViewText(R.id.whatsapp_time, formatTime(item.optLong("timestamp")))
-            setOnClickFillInIntent(R.id.whatsapp_row, Intent())
-        }
+        return notificationRow(context, item)
     }
 
     override fun getLoadingView(): RemoteViews? = null
@@ -321,8 +323,23 @@ private class WhatsAppWidgetFactory(private val context: Context) : RemoteViewsS
 
     override fun hasStableIds(): Boolean = true
 
-    private fun formatTime(timestamp: Long): String {
-        if (timestamp <= 0L) return ""
-        return SimpleDateFormat("HH:mm", Locale.getDefault()).format(Date(timestamp))
+}
+
+private fun notificationRow(context: Context, item: JSONObject): RemoteViews {
+    val sender = item.optString("sender", "WhatsApp")
+    return RemoteViews(context.packageName, R.layout.whatsapp_widget_row).apply {
+        setTextViewText(
+            R.id.whatsapp_initial,
+            sender.trim().firstOrNull()?.uppercaseChar()?.toString() ?: "W",
+        )
+        setTextViewText(R.id.whatsapp_sender, sender)
+        setTextViewText(R.id.whatsapp_message, item.optString("message", ""))
+        setTextViewText(R.id.whatsapp_time, formatWhatsAppTime(item.optLong("timestamp")))
+        setOnClickFillInIntent(R.id.whatsapp_row, Intent())
     }
+}
+
+private fun formatWhatsAppTime(timestamp: Long): String {
+    if (timestamp <= 0L) return ""
+    return SimpleDateFormat("HH:mm", Locale.getDefault()).format(Date(timestamp))
 }
